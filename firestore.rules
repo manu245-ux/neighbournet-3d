@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.role == 'admin' || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // Complaints Collection
+    match /complaints/{complaintId} {
+      allow read: if isAuthenticated() && 
+        (resource.data.visibility == 'public' || 
+         resource.data.reporterId == request.auth.uid || 
+         isAdmin());
+      
+      allow create: if isAuthenticated() &&
+        request.resource.data.reporterId == request.auth.uid &&
+        request.resource.data.status == 'PENDING_VERIFICATION';
+        
+      allow update: if isAdmin() || (
+        isOwner(resource.data.reporterId) && 
+        resource.data.status == 'PENDING_VERIFICATION' &&
+        request.resource.data.status == 'WITHDRAWN'
+      );
+      
+      allow delete: if false; // Strict audit log preservation
+    }
+
+    // Complaint Timeline (Append-Only)
+    match /complaintTimeline/{entry} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    // In-App Notifications: Strictly accessible by recipient
+    match /notifications/{notifId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readStatus']);
+      allow create: if isAuthenticated();
+      allow delete: if false;
+    }
+
+    // Official Bulletins: Admin write only
+    match /announcements/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Confirmations: One vote per resident
+    match /confirmations/{id} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Counters: Internal atomic transaction only
+    match /counters/{counterId} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}

@@ -1,0 +1,9 @@
+# Active Database Mode
+VITE_DATABASE_MODE=supabase
+
+# Supabase Cloud Project Configuration
+VITE_SUPABASE_URL=https://arzhndtgryawgzbquleb.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_SHt1UL6bilkPTbH8vpJLmg_Bo1WLdHa
+
+# Fallback Settings
+VITE_USE_FIREBASE=false
